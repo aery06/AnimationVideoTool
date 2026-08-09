@@ -1,0 +1,33 @@
+{
+  "01_project_input.json": {"_meta":{"schema_name":"project_input","schema_version":"0.1.0","project_id":"CAP_BENCH_001"},"topic":"What is a capacitor?","objective":"Explain capacitor basics with a deterministic technical motion-graphics benchmark.","audience":{"level":"beginner"},"platform":{"name":"youtube_shorts","aspect_ratio":"9:16"},"duration":{"target_seconds":60},"language":"en"},
+  "02_technical_truth.json": {"_meta":{"schema_name":"technical_truth","schema_version":"0.1.0","project_id":"CAP_BENCH_001"},"facts":[{"fact_id":"F001","claim":"A capacitor stores energy using separated charge and an electric field."}],"forbidden_visuals":["normal conduction through dielectric"],"qa_rules":[{"rule_id":"TR001","severity":"blocker","assertion":"Do not show charge crossing dielectric."},{"rule_id":"TR002","severity":"major","assertion":"Water is an analogy only."},{"rule_id":"TR003","severity":"major","assertion":"Respect voltage rating."},{"rule_id":"TR004","severity":"major","assertion":"Polarity warning applies to polarized types."}]},
+  "03_benchmark_style.json": {"_meta":{"schema_name":"benchmark_style","schema_version":"0.1.0","project_id":"CAP_BENCH_001"},"visual_language":"engineering technical motion graphics","background":"engineering_grid","highlight":"yellow","motion_grammar":["fade","scale","arrow","waveform","state_change"]},
+  "04_storyboard.json": {"_meta":{"schema_name":"storyboard","schema_version":"0.1.0","project_id":"CAP_BENCH_001"},"total_duration_seconds":60.0,"scenes":[
+    {"scene_id":"S01","start_seconds":0.0,"end_seconds":5.2,"duration_seconds":5.2,"narration_draft":"A capacitor is an electronic component that can temporarily store electrical energy."},
+    {"scene_id":"S02","start_seconds":5.2,"end_seconds":11.4,"duration_seconds":6.2,"narration_draft":"When the circuit is energized, charge separates; when the supply falls, that stored energy can be released."},
+    {"scene_id":"S03","start_seconds":11.4,"end_seconds":17.2,"duration_seconds":5.8,"narration_draft":"That makes capacitors useful for reducing short interruptions and voltage fluctuations."},
+    {"scene_id":"S04","start_seconds":17.2,"end_seconds":22.8,"duration_seconds":5.6,"narration_draft":"Depending on the circuit, capacitors can also help filter changing signal components."},
+    {"scene_id":"S05","start_seconds":22.8,"end_seconds":29.0,"duration_seconds":6.2,"narration_draft":"A useful analogy is water flowing through a pipe controlled by a valve."},
+    {"scene_id":"S06","start_seconds":29.0,"end_seconds":36.4,"duration_seconds":7.4,"narration_draft":"If the valve closes, the flow stops. Add a storage tank, however, and some water can be kept in reserve."},
+    {"scene_id":"S07","start_seconds":36.4,"end_seconds":43.8,"duration_seconds":7.4,"narration_draft":"Now when the valve closes, the reserve can keep water flowing for a short time."},
+    {"scene_id":"S08","start_seconds":43.8,"end_seconds":50.0,"duration_seconds":6.2,"narration_draft":"The capacitor plays a similar role electrically: it stores energy and releases it when the circuit needs it."},
+    {"scene_id":"S09","start_seconds":50.0,"end_seconds":55.3,"duration_seconds":5.3,"narration_draft":"But every capacitor has operating limits, including a maximum rated voltage."},
+    {"scene_id":"S10","start_seconds":55.3,"end_seconds":60.0,"duration_seconds":4.7,"narration_draft":"And some types are polarized, so voltage and polarity must both be respected."}
+  ]},
+  "05_scene_spec.json": {"_meta":{"schema_name":"scene_spec","schema_version":"0.1.0","project_id":"CAP_BENCH_001"},"scenes":[
+    {"scene_id":"S01","start_seconds":0.0,"end_seconds":5.2,"duration_seconds":5.2,"background_asset":"bg_engineering_grid_v1","objects":[],"technical_rules":[]},
+    {"scene_id":"S02","start_seconds":5.2,"end_seconds":11.4,"duration_seconds":6.2,"background_asset":"bg_engineering_grid_v1","objects":[],"technical_rules":["TR001"]},
+    {"scene_id":"S03","start_seconds":11.4,"end_seconds":17.2,"duration_seconds":5.8,"background_asset":"bg_engineering_grid_v1","objects":[],"technical_rules":[]},
+    {"scene_id":"S04","start_seconds":17.2,"end_seconds":22.8,"duration_seconds":5.6,"background_asset":"bg_engineering_grid_v1","objects":[],"technical_rules":[]},
+    {"scene_id":"S05","start_seconds":22.8,"end_seconds":29.0,"duration_seconds":6.2,"background_asset":"bg_engineering_grid_v1","objects":[],"technical_rules":["TR002"]},
+    {"scene_id":"S06","start_seconds":29.0,"end_seconds":36.4,"duration_seconds":7.4,"background_asset":"bg_engineering_grid_v1","objects":[],"technical_rules":["TR002"]},
+    {"scene_id":"S07","start_seconds":36.4,"end_seconds":43.8,"duration_seconds":7.4,"background_asset":"bg_engineering_grid_v1","objects":[],"technical_rules":["TR002"]},
+    {"scene_id":"S08","start_seconds":43.8,"end_seconds":50.0,"duration_seconds":6.2,"background_asset":"bg_engineering_grid_v1","objects":[],"technical_rules":["TR002"]},
+    {"scene_id":"S09","start_seconds":50.0,"end_seconds":55.3,"duration_seconds":5.3,"background_asset":"bg_engineering_grid_v1","objects":[],"technical_rules":["TR003"]},
+    {"scene_id":"S10","start_seconds":55.3,"end_seconds":60.0,"duration_seconds":4.7,"background_asset":"bg_engineering_grid_v1","objects":[],"technical_rules":["TR004"]}
+  ]},
+  "06_asset_manifest.json": {"_meta":{"schema_name":"asset_manifest","schema_version":"0.1.0","project_id":"CAP_BENCH_001"},"assets":[{"asset_id":"bg_engineering_grid_v1"}]},
+  "07_narration_timing.json": {"_meta":{"schema_name":"narration_timing","schema_version":"0.1.0","project_id":"CAP_BENCH_001"},"segments":[{"scene_id":"S01"},{"scene_id":"S02"},{"scene_id":"S03"},{"scene_id":"S04"},{"scene_id":"S05"},{"scene_id":"S06"},{"scene_id":"S07"},{"scene_id":"S08"},{"scene_id":"S09"},{"scene_id":"S10"}]},
+  "08_render_config.json": {"_meta":{"schema_name":"render_config","schema_version":"0.1.0","project_id":"CAP_BENCH_001"},"video":{"width":1080,"height":1920,"fps":30,"duration_seconds":60.0,"container":"mp4","video_codec":"h264"},"safe_zone":{"top":150,"bottom":320,"left":80,"right":190},"determinism":{"random_seed":17012023,"fixed_frame_count":1800},"output":{"filename":"CAP_BENCH_001_final.mp4"}},
+  "09_verification_report.json": {"_meta":{"schema_name":"verification_report","schema_version":"0.1.0","project_id":"CAP_BENCH_001"},"reference":{"url":"https://youtube.com/shorts/MuHcbTuCCWE"},"acceptance_thresholds":{"duration_error_seconds_max":2.0},"results":{"overall_status":"NOT_RUN","blocker_violations":[]}}
+}

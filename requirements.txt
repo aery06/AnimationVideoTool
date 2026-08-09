@@ -1,4 +1,4 @@
 gradio>=6.5,<7
 jsonschema>=4.0
-opencv-python>=4.8
+opencv-python-headless>=4.8
 numpy>=1.24

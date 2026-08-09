@@ -1,10 +1,13 @@
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
 venv/
-projects/*/output/
-projects/*/logs/
-projects/*_assistant_bundle.zip
+.env
+.DS_Store
+projects/*
+!projects/.gitkeep
+output/
+logs/
 *.mp4
 *.wav
 *.zip
