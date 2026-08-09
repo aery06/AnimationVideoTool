@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+projects/*/output/
+projects/*/logs/
+projects/*_assistant_bundle.zip
+*.mp4
+*.wav
+*.zip
