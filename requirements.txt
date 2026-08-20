@@ -1,0 +1,4 @@
+gradio>=6.25,<7
+jsonschema>=4.0
+opencv-python-headless>=4.8
+numpy>=1.24

@@ -1,0 +1,13 @@
+services:
+  animation-video-tool:
+    build: .
+    container_name: animation-video-tool
+    ports:
+      - "7860:7860"
+    environment:
+      AEV_HOST: 0.0.0.0
+      AEV_PORT: 7860
+      AEV_INBROWSER: 0
+    volumes:
+      - ./projects:/app/projects
+    restart: unless-stopped

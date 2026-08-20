@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.DS_Store
+projects/*
+!projects/.gitkeep
+output/
+logs/
+*.mp4
+*.wav
+*.zip
