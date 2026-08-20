@@ -38,6 +38,81 @@ def draw_grid(img, step=36):
     for x in range(0,W,step*5): cv2.line(img,(x,0),(x,H),(105,70,35),1,cv2.LINE_AA)
     for y in range(0,H,step*5): cv2.line(img,(0,y),(W,y),(105,70,35),1,cv2.LINE_AA)
 
+def hex_bgr(value, fallback=NAVY):
+    value=str(value or '').strip().lstrip('#')
+    if len(value)==3: value=''.join(c*2 for c in value)
+    try: return (int(value[4:6],16),int(value[2:4],16),int(value[0:2],16))
+    except Exception: return fallback
+
+def resize_cover(frame):
+    if frame is None or frame.size==0: return None
+    h,w=frame.shape[:2]; scale=max(W/max(w,1),H/max(h,1)); nw,nh=max(W,int(round(w*scale))),max(H,int(round(h*scale)))
+    resized=cv2.resize(frame,(nw,nh),interpolation=cv2.INTER_AREA if scale<1 else cv2.INTER_LINEAR)
+    x=max(0,(nw-W)//2); y=max(0,(nh-H)//2)
+    return resized[y:y+H,x:x+W]
+
+class BackgroundProvider:
+    def __init__(self, bench, manifest):
+        self.root=Path(bench)/'assets'; self.content_root=Path(bench)/'scene_images'; self.assets={a['asset_id']:a for a in manifest.get('assets',[])}; self.images={}; self.raw_images={}; self.videos={}; self.video_frames={}; self.generated={}
+
+    def _image(self, path):
+        key=str(path)
+        if key not in self.images: self.images[key]=resize_cover(cv2.imread(key,cv2.IMREAD_COLOR))
+        return self.images[key]
+
+    def _video(self, path, seconds):
+        key=str(path); cap=self.videos.get(key)
+        if cap is None:
+            cap=cv2.VideoCapture(key); self.videos[key]=cap
+        if not cap.isOpened(): return None
+        fps=cap.get(cv2.CAP_PROP_FPS) or 30.0; count=int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0); duration=count/fps if count>0 else 0
+        position=(seconds%duration) if duration>0 else max(0,seconds); target=max(0,int(position*fps))
+        previous=self.video_frames.get(key)
+        if previous and previous[0]==target: return previous[1]
+        if not previous or target!=previous[0]+1: cap.set(cv2.CAP_PROP_POS_FRAMES,target)
+        ok,frame=cap.read()
+        if not ok and target:
+            cap.set(cv2.CAP_PROP_POS_FRAMES,0); ok,frame=cap.read(); target=0
+        fitted=resize_cover(frame) if ok else None
+        if fitted is not None: self.video_frames[key]=(target,fitted)
+        return fitted
+
+    def __del__(self):
+        for cap in self.videos.values(): cap.release()
+
+    def draw(self, img, asset_id, seconds):
+        asset=self.assets.get(asset_id,{"source_type":"built_in_grid","source_value":"engineering_grid"})
+        source_type=asset.get('source_type','built_in_grid'); value=asset.get('source_value','engineering_grid')
+        if source_type=='solid_color': img[:]=hex_bgr(value); return
+        if source_type=='gradient':
+            key=('gradient',str(value))
+            if key not in self.generated:
+                colors=[x.strip() for x in str(value).split(',')]; top=np.array(hex_bgr(colors[0] if colors else ''),dtype=np.float32); bottom=np.array(hex_bgr(colors[1] if len(colors)>1 else ''),dtype=np.float32)
+                blend=np.linspace(0,1,H,dtype=np.float32)[:,None,None]; self.generated[key]=np.repeat((top*(1-blend)+bottom*blend).astype(np.uint8),W,axis=1)
+            img[:]=self.generated[key]; return
+        if source_type in {'external_image','external_video'}:
+            path=self.root/Path(str(value)).name
+            frame=self._image(path) if source_type=='external_image' else self._video(path,seconds)
+            if frame is not None: img[:]=frame; return
+        draw_grid(img)
+
+    def draw_content(self, img, asset_id, progress, fit='contain', motion='none'):
+        if not asset_id: return False
+        asset=self.assets.get(asset_id)
+        if not asset or asset.get('source_type')!='content_image': return False
+        path=self.content_root/Path(str(asset.get('source_value',''))).name; key=str(path)
+        if key not in self.raw_images: self.raw_images[key]=cv2.imread(key,cv2.IMREAD_COLOR)
+        source=self.raw_images[key]
+        if source is None or source.size==0: return False
+        h,w=source.shape[:2]; base=max(W/w,H/h) if fit=='cover' else min(W/w,H/h); zoom=1.0+(0.08*max(0,min(1,progress)) if motion=='slow_zoom' else 0)
+        scale=base*zoom; nw,nh=max(1,int(round(w*scale))),max(1,int(round(h*scale))); resized=cv2.resize(source,(nw,nh),interpolation=cv2.INTER_AREA if scale<1 else cv2.INTER_LINEAR)
+        if fit=='cover' or nw>W or nh>H:
+            x=max(0,(nw-W)//2); y=max(0,(nh-H)//2); crop=resized[y:y+min(H,nh),x:x+min(W,nw)]
+            oy=(H-crop.shape[0])//2; ox=(W-crop.shape[1])//2; img[oy:oy+crop.shape[0],ox:ox+crop.shape[1]]=crop
+        else:
+            x=(W-nw)//2; y=(H-nh)//2; cv2.rectangle(img,(max(0,x-3),max(0,y-3)),(min(W-1,x+nw+2),min(H-1,y+nh+2)),(230,230,230),2,cv2.LINE_AA); img[y:y+nh,x:x+nw]=resized
+        return True
+
 def put_center(img,text,y,size=0.8,color=WHITE,th=2):
     (tw,_),_ = cv2.getTextSize(text,FONT,size,th)
     cv2.putText(img,text,((W-tw)//2,int(y)),FONT,size,color,th,cv2.LINE_AA)
@@ -46,6 +121,7 @@ def wrap_words(text,max_words=6):
     words=text.upper().split(); return [' '.join(words[i:i+max_words]) for i in range(0,len(words),max_words)]
 
 def draw_caption(img,text,scene_t,scene_d):
+    if not str(text or '').strip(): return
     chunks=wrap_words(text,6)
     idx=min(len(chunks)-1,int((scene_t/max(scene_d,0.001))*len(chunks)))
     cap=chunks[idx]; y=775
@@ -110,10 +186,13 @@ def draw_pipe(img,cx,cy,s=1.0,flow=1.0,valve_angle=0,tank=None):
         fill_h=int((th-8)*max(0,min(1,level))); cv2.rectangle(img,(tx-tw//2+4,ty+th//2-4-fill_h),(tx+tw//2-4,ty+th//2-4),(70,155,235),-1)
         cv2.line(img,(tx,ty+th//2),(tx,y),WHITE,12,cv2.LINE_AA); cv2.line(img,(tx,ty+th//2),(tx,y),(70,155,235),7,cv2.LINE_AA)
 
-def draw_scene(scene, global_t, narration):
-    img=np.zeros((H,W,3),dtype=np.uint8); draw_grid(img)
-    sid=scene['scene_id']; t=global_t-scene['start_seconds']; d=scene['duration_seconds']; p=max(0,min(1,t/d))
-    if sid=='S01':
+def draw_scene(scene, global_t, narration, backgrounds=None):
+    img=np.zeros((H,W,3),dtype=np.uint8); sid=scene['scene_id']; t=global_t-scene['start_seconds']; d=scene['duration_seconds']; p=max(0,min(1,t/d))
+    if backgrounds: backgrounds.draw(img,scene.get('background_asset'),t)
+    else: draw_grid(img)
+    has_content=backgrounds.draw_content(img,scene.get('content_image_asset'),p,scene.get('image_fit','contain'),scene.get('image_motion','none')) if backgrounds else False
+    if has_content: pass
+    elif sid=='S01':
         s=0.82+0.18*ease(min(1,t/0.7)); draw_capacitor(img,W//2,500,s); put_center(img,'CAPACITOR',230,0.95,YELLOW,2)
         if t>2.0:
             for i in range(8):
@@ -159,29 +238,61 @@ def _tts_binary():
         if found: return found
     raise RuntimeError('No local TTS executable found. Install eSpeak NG/eSpeak or set AEV_TTS_CMD.')
 
-def make_audio(storyboard, outwav):
+def resolve_voice(audio_config):
+    voice_type=audio_config.get('voice_type','female')
+    voices={'male':'en-us+m3','female':'en-us+f3','robotic':'en-us+croak'}
+    if voice_type=='custom': return audio_config.get('custom_voice') or 'en-us'
+    return voices.get(voice_type,'en-us+f3')
+
+def validate_voice(tts, voice):
+    """Fail early with an actionable error when eSpeak cannot resolve a voice."""
+    check=subprocess.run([tts,'-q','-v',voice,'Voice validation'],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE,text=True)
+    if check.returncode:
+        detail=check.stderr.strip()
+        raise ValueError(
+            f'Invalid custom voice {voice!r}. Use an installed eSpeak voice such as '
+            f'en-us, en-us+m3, en-us+f3, or en-us+croak. '
+            f'Run `espeak-ng --voices` to see installed base voices.'
+            + (f' eSpeak said: {detail}' if detail else '')
+        )
+
+def make_audio(storyboard, outwav, audio_config):
     tmp=OUT/'audio_scenes'; tmp.mkdir(exist_ok=True); concat=[]; tts=_tts_binary()
+    voice=resolve_voice(audio_config); validate_voice(tts,voice)
     for scene in storyboard['scenes']:
         sid=scene['scene_id']; text=scene['narration_draft']; dur=scene['duration_seconds']; raw=tmp/f'{sid}_raw.wav'; fixed=tmp/f'{sid}.wav'
-        subprocess.run([tts,'-s','165','-v','en-us','-w',str(raw),text],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        subprocess.run([tts,'-s','165','-v',voice,'-w',str(raw),text],check=True,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         subprocess.run(['ffmpeg','-y','-loglevel','error','-i',str(raw),'-af',f'apad,atrim=0:{dur},aresample=48000','-ac','2',str(fixed)],check=True); concat.append(f"file '{fixed.as_posix()}'")
     listfile=tmp/'concat.txt'; listfile.write_text('\n'.join(concat),encoding='utf-8'); subprocess.run(['ffmpeg','-y','-loglevel','error','-f','concat','-safe','0','-i',str(listfile),'-t',str(storyboard['total_duration_seconds']),'-ar','48000','-ac','2',str(outwav)],check=True)
 
+def prepare_uploaded_audio(source, outwav, duration):
+    if not Path(source).is_file(): raise FileNotFoundError(f'Uploaded audio not found: {source}')
+    audio_filter=f'apad,atrim=0:{duration},aresample=48000'
+    subprocess.run(['ffmpeg','-y','-loglevel','error','-i',str(source),'-vn','-af',audio_filter,'-ar','48000','-ac','2',str(outwav)],check=True)
+
 def render(bench=DEFAULT_BENCH, suffix=''):
     storyboard=load_json(bench/'04_storyboard.json'); spec=load_json(bench/'05_scene_spec.json'); cfg=load_json(bench/'08_render_config.json')
+    asset_manifest=load_json(bench/'06_asset_manifest.json'); backgrounds=BackgroundProvider(bench,asset_manifest)
+    audio_config=cfg.get('audio',{}); uploaded_audio=os.environ.get('AEV_AUDIO_FILE')
+    # Validate generated voices before spending time rendering video frames.
+    if not uploaded_audio:
+        tts=_tts_binary(); validate_voice(tts,resolve_voice(audio_config))
     narration_map={s['scene_id']:s['narration_draft'] for s in storyboard['scenes']}; total=cfg['video']['duration_seconds']; total_frames=int(round(total*RENDER_FPS)); pid=load_json(bench/'01_project_input.json').get('_meta',{}).get('project_id','PROJECT')
     silent=OUT/f'{pid}_silent{suffix}.mp4'; audio=OUT/f'{pid}_narration{suffix}.wav'; final=OUT/f'{pid}_final{suffix}.mp4'
-    cmd=['ffmpeg','-y','-loglevel','error','-f','rawvideo','-pix_fmt','bgr24','-s',f'{W}x{H}','-r',str(RENDER_FPS),'-i','-','-vf',f'scale={cfg["video"]["width"]}:{cfg["video"]["height"]}:flags=lanczos,fps={cfg["video"]["fps"]}','-an','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p','-movflags','+faststart',str(silent)]
+    cmd=['ffmpeg','-y','-loglevel','error','-f','rawvideo','-pix_fmt','bgr24','-s',f'{W}x{H}','-r',str(RENDER_FPS),'-i','-','-vf',f'scale={cfg["video"]["width"]}:{cfg["video"]["height"]}:flags=lanczos,fps={cfg["video"]["fps"]}','-frames:v',str(cfg['determinism']['fixed_frame_count']),'-an','-c:v','libx264','-preset','veryfast','-crf','20','-pix_fmt','yuv420p','-movflags','+faststart',str(silent)]
     proc=subprocess.Popen(cmd,stdin=subprocess.PIPE); scenes=spec['scenes']; si=0; midframes=[]
     for fi in range(total_frames):
         gt=fi/RENDER_FPS
         while si < len(scenes)-1 and gt >= scenes[si]['end_seconds']-1e-9: si+=1
-        scene=scenes[si]; img=draw_scene(scene,gt,narration_map[scene['scene_id']]); proc.stdin.write(img.tobytes()); mid=scene['start_seconds']+scene['duration_seconds']/2
+        scene=scenes[si]; img=draw_scene(scene,gt,narration_map[scene['scene_id']],backgrounds); proc.stdin.write(img.tobytes()); mid=scene['start_seconds']+scene['duration_seconds']/2
         if abs(gt-mid)<1/(2*RENDER_FPS):
             p=OUT/f'{scene["scene_id"]}_mid.png'; cv2.imwrite(str(p),img); midframes.append(str(p))
     proc.stdin.close(); rc=proc.wait()
     if rc!=0: raise RuntimeError('ffmpeg video render failed')
-    make_audio(storyboard,audio); subprocess.run(['ffmpeg','-y','-loglevel','error','-i',str(silent),'-i',str(audio),'-c:v','copy','-af','loudnorm=I=-14:TP=-1:LRA=7','-c:a','aac','-b:a','160k','-t',str(total),'-shortest',str(final)],check=True)
+    if uploaded_audio: prepare_uploaded_audio(uploaded_audio,audio,total)
+    else: make_audio(storyboard,audio,audio_config)
+    volume=max(0,float(audio_config.get('volume',1.0)))
+    subprocess.run(['ffmpeg','-y','-loglevel','error','-i',str(silent),'-i',str(audio),'-c:v','copy','-af',f'volume={volume}','-c:a','aac','-b:a','160k','-t',str(total),str(final)],check=True)
     return final, midframes
 
 def sha256(path):

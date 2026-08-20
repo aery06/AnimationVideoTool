@@ -67,6 +67,16 @@ The GUI launches on `http://127.0.0.1:7860`.
 - Exports/imports a portable assistant bundle.
 - Keeps project state as ordinary files under `projects/`.
 
+## Main scene images
+
+Foreground images used as the actual video content are stored separately from backgrounds:
+
+```text
+projects/<project_id>/input/scene_images/
+```
+
+Use **6 · Assets → Main scene images** to upload and assign images, or copy supported images into that folder and click **Scan the scene_images folder and assign**. Images named with a scene ID (for example, `S01_diagram.png`) are matched to that scene first; remaining images are assigned in upload/folder order. The mapping is visible in Stage 5 under `content_image_asset`.
+
 ## Current limitation
 
 Renderer V0.1 is still benchmark-specific. It proves the local GUI, contract validation, render execution, project persistence, and assistant round-trip. The next renderer milestone is the generic scene-action registry so new topics can be rendered without scene-specific Python code.

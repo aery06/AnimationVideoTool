@@ -45,11 +45,62 @@ def validate(project_dir, schema_bundle_path):
     story=instances['04_storyboard.json']; spec=instances['05_scene_spec.json']; narr=instances['07_narration_timing.json']; assets=instances['06_asset_manifest.json']; truth=instances['02_technical_truth.json']; cfg=instances['08_render_config.json']
     story_ids=[x['scene_id'] for x in story['scenes']]; spec_ids=[x['scene_id'] for x in spec['scenes']]; narr_ids=[x['scene_id'] for x in narr['segments']]
     if not (story_ids==spec_ids==narr_ids): errors.append('Scene IDs/order mismatch across storyboard, scene spec, narration.')
-    asset_ids={x['asset_id'] for x in assets['assets']}
+    asset_list=assets['assets']; asset_ids={x['asset_id'] for x in asset_list}
+    if len(asset_ids)!=len(asset_list): errors.append('Asset IDs must be unique.')
+    valid_background_types={'built_in_grid','solid_color','gradient','external_image','external_video'}; valid_asset_types=valid_background_types|{'content_image'}
+    image_extensions={'.png','.jpg','.jpeg','.webp','.bmp'}; video_extensions={'.mp4','.mov','.mkv','.webm','.avi','.m4v'}
+    def valid_hex(value):
+        value=str(value or '').strip()
+        return len(value) in {4,7} and value.startswith('#') and all(c in '0123456789abcdefABCDEF' for c in value[1:])
+    for asset in asset_list:
+        source_type=asset.get('source_type','built_in_grid'); source_value=asset.get('source_value','engineering_grid')
+        if source_type not in valid_asset_types:
+            errors.append(f"{asset['asset_id']} has unsupported source_type: {source_type}")
+        elif source_type=='content_image':
+            source_text=str(source_value or ''); source_name=Path(source_text).name; media_path=inp/'scene_images'/source_name
+            if source_name!=source_text or source_text in {'.','..'}: errors.append(f"{asset['asset_id']} content image source must be a filename, not a path: {source_value}")
+            elif media_path.suffix.lower() not in image_extensions: errors.append(f"{asset['asset_id']} must use a supported scene image: {sorted(image_extensions)}")
+            elif not media_path.is_file(): errors.append(f"{asset['asset_id']} scene image is missing from input/scene_images: {source_value}")
+            else:
+                try:
+                    raw=subprocess.check_output(['ffprobe','-v','error','-select_streams','v:0','-show_entries','stream=width,height','-of','json',str(media_path)],stderr=subprocess.STDOUT,text=True)
+                    stream=(json.loads(raw).get('streams') or [None])[0]
+                    if not stream or int(stream.get('width') or 0)<1 or int(stream.get('height') or 0)<1: raise ValueError('no decodable image stream')
+                except Exception as e: errors.append(f"{asset['asset_id']} scene image cannot be decoded: {e}")
+        elif source_type in {'external_image','external_video'}:
+            source_text=str(source_value or ''); source_name=Path(source_text).name; media_path=inp/'assets'/source_name
+            if source_name!=source_text or source_text in {'.','..'}:
+                errors.append(f"{asset['asset_id']} background source must be a filename, not a path: {source_value}")
+            elif not source_value or not media_path.is_file():
+                errors.append(f"{asset['asset_id']} background file is missing from input/assets: {source_value}")
+            elif source_type=='external_image' and media_path.suffix.lower() not in image_extensions:
+                errors.append(f"{asset['asset_id']} must use a supported image file: {sorted(image_extensions)}")
+            elif source_type=='external_video' and media_path.suffix.lower() not in video_extensions:
+                errors.append(f"{asset['asset_id']} must use a supported video file: {sorted(video_extensions)}")
+            else:
+                try:
+                    raw=subprocess.check_output(['ffprobe','-v','error','-select_streams','v:0','-show_entries','stream=codec_type,width,height','-of','json',str(media_path)],stderr=subprocess.STDOUT,text=True)
+                    stream=(json.loads(raw).get('streams') or [None])[0]
+                    if not stream or int(stream.get('width') or 0)<1 or int(stream.get('height') or 0)<1: raise ValueError('no decodable video/image stream')
+                except Exception as e: errors.append(f"{asset['asset_id']} cannot be decoded as a background: {e}")
+        elif source_type=='solid_color' and not valid_hex(source_value):
+            errors.append(f"{asset['asset_id']} needs a hex color such as #0F172A.")
+        elif source_type=='gradient':
+            colors=[x.strip() for x in str(source_value).split(',')]
+            if len(colors)!=2 or not all(valid_hex(color) for color in colors):
+                errors.append(f"{asset['asset_id']} gradient needs two hex colors separated by a comma.")
+    assets_by_id={asset['asset_id']:asset for asset in asset_list}
     for sc in spec['scenes']:
-        refs={sc.get('background_asset')}|{o.get('asset_id') for o in sc.get('objects',[])}
+        if not sc.get('background_asset'): errors.append(f"{sc['scene_id']} needs a background_asset ID.")
+        content_id=sc.get('content_image_asset'); refs={sc.get('background_asset'),content_id}|{o.get('asset_id') for o in sc.get('objects',[])}
         miss=[r for r in refs if r and r not in asset_ids]
         if miss: errors.append(f"{sc['scene_id']} missing assets: {miss}")
+        background_entry=assets_by_id.get(sc.get('background_asset'))
+        if background_entry and background_entry.get('source_type','built_in_grid')=='content_image': errors.append(f"{sc['scene_id']} background_asset cannot reference a content_image.")
+        content_entry=assets_by_id.get(content_id) if content_id else None
+        if content_entry and content_entry.get('source_type')!='content_image': errors.append(f"{sc['scene_id']} content_image_asset must reference a content_image asset.")
+        if sc.get('image_fit','contain') not in {'contain','cover'}: errors.append(f"{sc['scene_id']} image_fit must be contain or cover.")
+        if sc.get('image_motion','none') not in {'none','slow_zoom'}: errors.append(f"{sc['scene_id']} image_motion must be none or slow_zoom.")
     rule_ids={x['rule_id'] for x in truth['qa_rules']}
     for sc in spec['scenes']:
         bad=[r for r in sc.get('technical_rules',[]) if r not in rule_ids]
@@ -109,6 +160,8 @@ def make_manifest(project_dir, video_path):
     data={
       'project_id':load_json(inp/'01_project_input.json').get('_meta',{}).get('project_id','PROJECT'),
       'input_hashes':{f:sha256(inp/f) for f in FILES},
+      'asset_hashes':{str(f.relative_to(inp)):sha256(f) for f in sorted((inp/'assets').rglob('*')) if f.is_file()} if (inp/'assets').exists() else {},
+      'scene_image_hashes':{str(f.relative_to(inp)):sha256(f) for f in sorted((inp/'scene_images').rglob('*')) if f.is_file()} if (inp/'scene_images').exists() else {},
       'output_video':{'path':str(video_path),'sha256':sha256(video_path)},
       'gui_version':'0.1.0','renderer_version':'0.1.0'
     }
